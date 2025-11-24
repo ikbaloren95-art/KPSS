@@ -1,0 +1,429 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KPSS Flashcard Tekrarı (CSV Taşınabilir)</title>
+    <style>
+        /* CSS: Stil Kuralları (Önceki düzeltmeler dahil) */
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            padding-top: 20px;
+            margin: 0;
+            background-color: #f4f4f9;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 600px; 
+            padding: 20px;
+            text-align: center;
+        }
+
+        /* Yeni: CSV Yükleme Alanı */
+        #csv-upload-section {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 2px dashed #007bff;
+            border-radius: 8px;
+            background-color: #e6f0ff;
+        }
+        
+        #csv-upload-section input[type="file"] {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1em;
+            background-color: #fff;
+        }
+        
+        /* Ders Seçim ve Favori Kontrol Alanı */
+        .top-controls {
+             display: flex;
+             flex-direction: column;
+             width: 100%;
+             margin-bottom: 25px;
+             z-index: 20; 
+        }
+
+        .subject-selector label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .subject-selector select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 1em;
+            appearance: none;
+            background: #fff url("data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2212%22%20height%3D%2212%22%20view-box%3D%220%200%2012%2012%22%3E%3Cpath%20d%3D%22M10%204L6%208L2%204%22%20fill%3D%22none%22%20stroke%3D%22%23333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E") no-repeat right 10px center;
+            background-size: 12px;
+        }
+
+        /* Flashcard Stilleri */
+        .flashcard-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            perspective: 1000px; 
+            margin-bottom: 20px;
+            z-index: 10;
+        }
+
+        #favorite-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 24px;
+            color: #ccc;
+            z-index: 15; 
+            transition: color 0.2s;
+        }
+        
+        #favorite-btn.is-favorite {
+            color: gold; 
+        }
+
+        /* Ana Kart Alanı */
+        .flashcard {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.6s;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .flashcard.flipped {
+            transform: rotateY(180deg);
+        }
+
+        .front, .back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            font-size: 1.2em;
+            text-align: center;
+            box-sizing: border-box;
+            
+            /* Metin Aynalama Sorununu Çözmek İçin */
+            -webkit-backface-visibility: hidden; 
+            -moz-backface-visibility: hidden; 
+            -ms-backface-visibility: hidden; 
+        }
+        
+        .front {
+            background-color: #fff;
+            color: #333;
+            border: 2px solid #007bff;
+            transform: rotateY(0deg); 
+            direction: ltr; 
+        }
+
+        .back {
+            background-color: #007bff;
+            color: #fff;
+            transform: rotateY(180deg); 
+            direction: ltr; 
+        }
+        
+        /* Kontrol Butonları ve Silme Butonu Stili */
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+        }
+        
+        .controls button {
+            padding: 10px 20px;
+            font-size: 1em;
+            margin: 0 5px; 
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .controls #next-btn {
+            background-color: #28a745;
+            color: white;
+            flex-grow: 1; 
+        }
+
+        .controls #next-btn:hover {
+            background-color: #218838;
+        }
+        
+        /* 🔥 ÖNEMLİ: Silme ve Kaydetme özelliği artık yok, sadece görünmez yapıyoruz. */
+        #delete-btn, #favorite-btn, .favorite-toggle-container {
+             display: none; 
+        }
+        
+        /* Yeni Kart Ekleme Formu da artık yok */
+        #add-card-form {
+             display: none;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>KPSS Tekrar Kartları (Taşınabilir) 📚</h2>
+        
+        <div id="csv-upload-section">
+            <label for="csv-file">1. CSV Dosyanızı Yükleyin:</label>
+            <input type="file" id="csv-file" accept=".csv" required>
+            <p style="font-size: 0.8em; color: #555;">(Format: Ders,Soru,Cevap)</p>
+        </div>
+        
+        <div class="top-controls">
+            <div class="subject-selector">
+                <label for="subject-select">2. Çalışmak İstediğiniz Dersi Seçin:</label>
+                <select id="subject-select" disabled>
+                    <option value="">Lütfen önce CSV yükleyin...</option>
+                </select>
+            </div>
+        </div>
+
+        <p>Görüntülenen Kart Sayısı: <span id="card-count">0/0</span></p>
+
+        <div class="flashcard-container">
+            <button id="favorite-btn" disabled>⭐</button>
+            
+            <div id="flashcard" class="flashcard">
+                <div id="front-text" class="front">Dosya yüklenmeyi bekliyor...</div>
+                <div id="back-text" class="back">Kartları görmek için bir CSV dosyası yükleyin.</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="delete-btn" disabled>Sil 🗑️</button>
+            <button id="next-btn" disabled>Sonraki Kart</button>
+        </div>
+        
+        <form id="add-card-form"></form>
+    </div>
+
+    <script>
+        // JavaScript: Veri ve Mantık
+        
+        // 2. Uygulama Değişkenleri
+        const flashcardElement = document.getElementById('flashcard');
+        const frontTextElement = document.getElementById('front-text');
+        const backTextElement = document.getElementById('back-text');
+        const nextButton = document.getElementById('next-btn');
+        const subjectSelect = document.getElementById('subject-select');
+        const csvFileInput = document.getElementById('csv-file'); // YENİ: Dosya Inputu
+        const cardCountElement = document.getElementById('card-count');
+        
+        let allFlashcards = []; // CSV'den yüklenen tüm kartlar
+        let subjectList = [];   // CSV'den elde edilen benzersiz dersler
+        let filteredCards = []; 
+        let currentCardIndex = 0;
+        let isFlipped = false;
+        let shuffledCardIndices = [];
+        let currentShuffledIndex = 0; 
+        
+        // --- 3. CSV Okuma ve Veri Yönetimi Fonksiyonları ---
+        
+        // CSV dosyasını okur ve allFlashcards dizisini doldurur
+        function loadCSV(file) {
+            const reader = new FileReader();
+            
+            reader.onload = function(event) {
+                const csvData = event.target.result;
+                parseCSV(csvData);
+                initializeApplication();
+                alert(`CSV başarıyla yüklendi! Toplam ${allFlashcards.length} kart bulundu.`);
+            };
+            
+            reader.onerror = function() {
+                alert('Dosya okuma hatası oluştu!');
+            };
+            
+            // Dosyayı metin olarak oku (UTF-8, Türkçe karakterler için önemli)
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        // CSV metnini kart objelerine dönüştürür
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            allFlashcards = [];
+            subjectList = new Set();
+            
+            lines.forEach(line => {
+                // Basit bir CSV ayrıştırması (kaba, ancak amaç için yeterli)
+                const parts = line.split(',');
+                
+                if (parts.length >= 3) {
+                    const subject = parts[0].trim();
+                    
+                    // Soru ve cevabın etrafındaki tırnak işaretlerini temizler
+                    const question = parts[1].trim().replace(/^"|"$/g, '');
+                    const answer = parts.slice(2).join(',').trim().replace(/^"|"$/g, '');
+
+                    if (subject && question && answer) {
+                        allFlashcards.push({
+                            subject: subject,
+                            question: question,
+                            answer: answer
+                        });
+                        subjectList.add(subject);
+                    }
+                }
+            });
+            subjectList = Array.from(subjectList); // Set'i diziye çevir
+        }
+        
+        // Uygulamayı başlatır (menüleri doldurur ve ilk filtrelemeyi yapar)
+        function initializeApplication() {
+             populateSubjectSelects(); 
+             filterAndLoadCards();
+        }
+
+        // Ders Seçim Menülerini CSV'den gelen derslerle doldurur
+        function populateSubjectSelects() {
+            // Menüyü temizle
+            subjectSelect.innerHTML = ''; 
+            
+            if (subjectList.length > 0) {
+                 subjectSelect.disabled = false;
+                 subjectList.forEach(subject => {
+                    const option = document.createElement('option');
+                    option.value = subject;
+                    option.textContent = subject;
+                    subjectSelect.appendChild(option);
+                });
+            } else {
+                 subjectSelect.disabled = true;
+                 const option = document.createElement('option');
+                 option.value = "";
+                 option.textContent = "CSV'de geçerli ders bulunamadı.";
+                 subjectSelect.appendChild(option);
+            }
+        }
+        
+        // CSV dosyası seçildiğinde yüklemeyi başlat
+        csvFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                loadCSV(file);
+            }
+        });
+
+
+        // --- 4. Karıştırma ve Yükleme Fonksiyonları (Öncekiyle aynı mantık) ---
+        
+        function getRandomNumber(max) {
+            return Math.floor(Math.random() * max);
+        }
+
+        function shuffleArray(arrayLength) {
+            shuffledCardIndices = Array.from({length: arrayLength}, (_, i) => i);
+            
+            for (let i = arrayLength - 1; i > 0; i--) {
+                const j = getRandomNumber(i + 1);
+                [shuffledCardIndices[i], shuffledCardIndices[j]] = [shuffledCardIndices[j], shuffledCardIndices[i]];
+            }
+        }
+
+        flashcardElement.addEventListener('click', () => {
+            // Artık favori/silme/kaydetme yok, sadece gösterim var.
+            if (filteredCards.length === 0 || nextButton.disabled) return; 
+            
+            isFlipped = !isFlipped;
+            if (isFlipped) {
+                flashcardElement.classList.add('flipped');
+            } else {
+                flashcardElement.classList.remove('flipped');
+            }
+        });
+
+        function loadShuffledCard(shuffledIndex) {
+            
+            flashcardElement.classList.remove('flipped');
+            isFlipped = false;
+            
+            const hasCards = filteredCards.length > 0;
+            
+            nextButton.disabled = !hasCards;
+
+            if (!hasCards) {
+                 frontTextElement.textContent = "Seçtiğiniz derse ait kart bulunmamaktadır.";
+                 backTextElement.textContent = "Lütfen önce bir CSV dosyası yükleyin ve geçerli bir ders seçin.";
+                 cardCountElement.textContent = `0/0`;
+                 return;
+            }
+
+            if (shuffledIndex >= filteredCards.length) {
+                frontTextElement.textContent = `Tebrikler! ${subjectSelect.value} dersindeki tüm kartları KARMA olarak tamamladınız.`;
+                backTextElement.textContent = "Tekrar başlamak için sonraki butona tıklayın, kartlar yeniden karıştırılacaktır.";
+                
+                currentShuffledIndex = 0; 
+                shuffleArray(filteredCards.length); 
+
+                cardCountElement.textContent = `${filteredCards.length}/${filteredCards.length}`;
+            } else {
+                const cardIndexInFilteredArray = shuffledCardIndices[shuffledIndex];
+                const card = filteredCards[cardIndexInFilteredArray];
+                
+                if (card && card.question) { 
+                    frontTextElement.textContent = card.question;
+                } else {
+                    frontTextElement.textContent = "Soru yüklenemedi. Kart eksik.";
+                }
+
+                backTextElement.textContent = card.answer;
+                
+                cardCountElement.textContent = `${shuffledIndex + 1}/${filteredCards.length}`;
+            }
+        }
+
+        function filterAndLoadCards() {
+            const selectedSubject = subjectSelect.value;
+            
+            // Eğer ders seçili değilse, tüm kartları göster (veya ilk yüklemede boş kalır)
+            if (!selectedSubject) {
+                 filteredCards = allFlashcards;
+            } else {
+                 filteredCards = allFlashcards.filter(card => card.subject === selectedSubject);
+            }
+            
+            shuffleArray(filteredCards.length);
+            currentShuffledIndex = 0;
+            
+            loadShuffledCard(currentShuffledIndex); 
+        }
+
+        nextButton.addEventListener('click', () => {
+            currentShuffledIndex++;
+            loadShuffledCard(currentShuffledIndex);
+        });
+        
+        subjectSelect.addEventListener('change', filterAndLoadCards);
+
+    </script>
+</body>
+</html>
